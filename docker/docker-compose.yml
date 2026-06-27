@@ -1,0 +1,133 @@
+# Snow Resorts — local development stack ($0 cost).
+# Brings up the AWS-equivalent backing services entirely on the developer machine:
+#   postgres (PostGIS)  -> RDS PostgreSQL + PostGIS
+#   redis               -> ElastiCache Redis (WebSocket fanout + leaderboard cache)
+#   minio               -> S3 (avatars, map packages, GPS tracks)
+#
+# Usage: `make dev` (from the snow-resorts-infra repo root) or
+#        `docker compose -f docker/docker-compose.yml up -d`.
+
+name: snow-resorts
+
+services:
+  postgres:
+    image: imresamu/postgis:16-3.4
+    container_name: snow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: snow
+      POSTGRES_PASSWORD: snow
+      POSTGRES_DB: snow_resorts
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snow -d snow_resorts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: snow-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: snow-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot job: provision the buckets the services expect, then exit.
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    container_name: snow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/snow-resorts-assets;
+      mc mb --ignore-existing local/snow-resorts-tracks;
+      mc anonymous set download local/snow-resorts-assets;
+      echo 'MinIO buckets ready: snow-resorts-assets, snow-resorts-tracks';
+      "
+
+  # Local SMTP capture (Mailpit). Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: snow-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Local API gateway: mirrors the prod ALB path routing. Listens on :8080 and
+  # proxies the new `/snow-resort-service/v1/*` (and `/ws/*`, `/.well-known/jwks.json`)
+  # paths to the host-run Spring services on ports 8081-8085.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: snow-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    # The services run on the host (not in Docker), so the upstreams must reach the
+    # host. `host.docker.internal` resolves natively on macOS/Windows; the extra_hosts
+    # mapping makes it work on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - swagger-ui
+
+  # Unified Swagger UI for the whole platform. Reached only through the nginx gateway at
+  # http://localhost:8080/swagger/ (not published directly). The `urls` dropdown lists all
+  # 5 services; each entry loads that service's live springdoc spec via the gateway's
+  # /api-docs/<service> proxy (same-origin, so no CORS). BASE_URL serves the UI under /swagger.
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.17.14
+    container_name: snow-swagger-ui
+    restart: unless-stopped
+    environment:
+      BASE_URL: /swagger
+      URLS_PRIMARY_NAME: auth-service
+      URLS: >-
+        [
+          {"url": "/api-docs/auth", "name": "auth-service"},
+          {"url": "/api-docs/user", "name": "user-service"},
+          {"url": "/api-docs/resort", "name": "resort-service"},
+          {"url": "/api-docs/location", "name": "location-service"},
+          {"url": "/api-docs/activity", "name": "activity-service"}
+        ]
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

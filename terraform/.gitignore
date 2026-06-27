@@ -1,0 +1,16 @@
+# Terraform working files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Sensitive / local var files (keep the .example versions)
+*.tfvars
+!*.tfvars.example
+
+# Lock files are committed intentionally:
+!.terraform.lock.hcl
+
+# Plan output
+*.tfplan

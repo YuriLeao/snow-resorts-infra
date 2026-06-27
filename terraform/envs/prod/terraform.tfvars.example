@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and adjust. Never commit real secrets.
+region = "us-east-1"
+azs    = ["us-east-1a", "us-east-1b"]
+
+# Required for HTTPS in prod (ACM cert in the same region as the ALB):
+# certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx"
+
+# Per-service images (push to ECR first):
+# service_images = {
+#   auth-service     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-resorts/auth-service:latest"
+#   user-service     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-resorts/user-service:latest"
+#   resort-service   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-resorts/resort-service:latest"
+#   location-service = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-resorts/location-service:latest"
+#   activity-service = "123456789012.dkr.ecr.us-east-1.amazonaws.com/snow-resorts/activity-service:latest"
+# }
+
+# Budget alerts:
+budget_warning_usd  = 150
+budget_critical_usd = 200
+# budget_alert_emails = ["ops@snow-resorts.app"]
