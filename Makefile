@@ -35,7 +35,7 @@ dev: up seed ## Boot local infra (Postgres+PostGIS, Redis, MinIO, nginx gateway)
 	@echo "API gateway (nginx, mirrors prod ALB) routes http://localhost:8080/snow-resort-service/v1/* to the host services on :8081-8085"
 
 .PHONY: up
-up: ## Start infra containers (Postgres, Redis, MinIO, nginx gateway :8080) in the background
+up: ## Start infra containers (Postgres, Redis, MinIO, Mailpit, nginx gateway :8080) in the background
 	@echo "Postgres host port: $(POSTGRES_PORT)"
 	@echo "POSTGRES_PORT=$(POSTGRES_PORT)" > .env
 	$(COMPOSE) up -d

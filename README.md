@@ -5,14 +5,14 @@ Infrastructure for the Snow Resorts platform:
 | Path | Purpose |
 |------|---------|
 | [`terraform/`](terraform/) | AWS IaC — reusable modules + `staging` (~$50/mo) and `prod` (~$120–200/mo) environments. See [`terraform/README.md`](terraform/README.md) |
-| [`docker/`](docker/) | Local dev stack ($0): Postgres+PostGIS, Redis, MinIO, nginx gateway (:8080) + unified Swagger UI |
+| [`docker/`](docker/) | Local dev stack ($0): Postgres+PostGIS, Redis, MinIO, **Mailpit** (SMTP/UI), nginx gateway (:8080) + unified Swagger UI |
 | [`scripts/`](scripts/) | `seed.sh` — idempotent demo data |
 | [`Makefile`](Makefile) | `make dev` boots local infra + seeds |
 
 ## Local development ($0)
 
 ```bash
-make dev          # boots Postgres/Redis/MinIO + the nginx gateway (:8080), and seeds a demo user + 3 resorts
+make dev          # boots Postgres/Redis/MinIO/Mailpit + nginx gateway (:8080), and seeds a demo user + 3 resorts
 ```
 
 Then run each service from its own repo (`snow-resorts-auth-service`, `-user-service`, `-resort-service`,
@@ -36,6 +36,13 @@ Demo credentials: `demo@snow-resorts.com` / `Password123!`.
   the gateway at `/api-docs/<service>` (→ the service's `/v3/api-docs`), so there is no CORS.
 - "Try it out" calls go back through the gateway (`http://localhost:8080/snow-resort-service/v1/...`),
   so the services must be running for requests to succeed (viewing the contracts works regardless).
+
+### Password-reset redirect (local only)
+
+The gateway exposes `GET /reset-password?token=…` — a static HTML page that redirects to the mobile app
+(`snowresorts://reset-password?token=…`). The auth-service embeds an **http** link to this page in
+reset e-mails (via `PASSWORD_RESET_BASE_URL` / `application-local.yml`) so links are clickable in
+Mailpit. See [LOCAL_DEV.md § Recuperar senha](../LOCAL_DEV.md#recuperar-senha-mailpit--redirect).
 
 ## AWS environments
 
